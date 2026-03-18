@@ -111,7 +111,7 @@ frontend/build
 services/**/dist
 
 # -----------------------
-
+ 
 # Database files
 
 # -----------------------
