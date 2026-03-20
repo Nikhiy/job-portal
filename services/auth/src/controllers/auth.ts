@@ -7,6 +7,9 @@ import bcrypt from 'bcrypt';
 import dotenv from 'dotenv'
 dotenv.config()
 import jwt from "jsonwebtoken";
+import { forgotPasswordTemplate } from "../template.js";
+import { publishToTopic } from "../producer.js";
+import { redisClient } from "../index.js";
 export const registerUser=TryCatch(async(req,res,next)=>{
     const {name,password,phoneNumber,role,bio,email}=req.body;
     if(!name || !password || !phoneNumber ||!role || !email){
@@ -85,5 +88,46 @@ export const loginUser=TryCatch(async(req,res,next)=>{
         message:"user LoggedIn",
         userObject,
         token
+    })
+})
+
+export const forgotPassword=TryCatch(async(req,res,next)=>{
+    const {email}=req.body;
+    if(!email){
+        throw new ErrorHandler(400,"Email is Required")
+    }
+    const users=await sql`
+    SELECT user_id,email FROM users WHERE email=${email}
+    `;
+    if(users.length===0){
+        return res.json({
+            message:"If email exists we have sent a request link"
+        })
+    }
+    const user=users[0];
+    const resetToken=jwt.sign({
+        email:user.email,type:"reset"
+    },process.env.JWT_SEC as string,{
+        expiresIn:"15m"
+    })
+
+    const resetLink=`${process.env.FRONTEND_URL}/reset/${resetToken}`
+
+    await redisClient.set(`forgot:${email}`,resetToken,{
+        EX:900,
+    })
+
+    const message={
+        to:email,
+        subject:"RESET Your password - hireHeaven",
+        html:forgotPasswordTemplate(resetLink),
+    }
+
+
+    publishToTopic("send-mail",message).catch((error)=>{
+        console.log(error)
+    })
+    res.json({
+        message:"If that email existes,we have sent a reset link"
     })
 })
