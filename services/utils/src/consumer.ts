@@ -30,7 +30,7 @@ export const startSendMailConsumer=async()=>{
                         secure:true,
                         auth:{
                             user:"nikhilchowdary2006@gmail.com",
-                            pass:"pkbhagvlfstahckm"
+                            pass:process.env.GOOGLE_PASS
                         }
                     })
 
