@@ -6,7 +6,7 @@ import { TryCatch } from "../utils/TryCatch.js";
 import bcrypt from 'bcrypt';
 import dotenv from 'dotenv'
 dotenv.config()
-import jwt from "jsonwebtoken";
+import jwt, { decode } from "jsonwebtoken";
 import { forgotPasswordTemplate } from "../template.js";
 import { publishToTopic } from "../producer.js";
 import { redisClient } from "../index.js";
@@ -129,5 +129,47 @@ export const forgotPassword=TryCatch(async(req,res,next)=>{
     })
     res.json({
         message:"If that email existes,we have sent a reset link"
+    })
+})
+
+export const resetPassword=TryCatch(async(req,res,next)=>{
+    const {token}=req.params;
+    const {password}=req.body;
+    let decoded:any;
+    try {
+        if (Array.isArray(token)) {
+            throw new ErrorHandler(400, "Invalid token format");
+        }
+        decoded=jwt.verify(token,process.env.JWT_SEC as string)
+    } catch (error) {
+        throw new ErrorHandler(400,"Expired token")
+    }
+    if(decoded.type!=="reset"){
+        throw new ErrorHandler(400,"Invalid token type")
+    }
+    const email=decoded.email
+
+    const storedToken=await redisClient.get(`forgot:${email}`)
+
+    if(!storedToken || storedToken!==token){
+        throw new ErrorHandler(400,"Token has been expired")
+    }
+
+    const users=await sql`
+    SELECT user_id FROM users WHERE email = ${email}
+    `
+    if(users.length===0){
+        throw new ErrorHandler(404,"user not found")
+    }
+    const user=users[0]
+
+    const hashPassword=await bcrypt.hash(password,10)
+
+    await sql`
+    UPDATE users SET password=${hashPassword} WHERE user_id=${user.user_id}
+    `;
+    await redisClient.del(`forgot:${email}`)
+    res.json({
+        message:"Password changed succesfully"
     })
 })

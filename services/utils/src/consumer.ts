@@ -29,7 +29,7 @@ export const startSendMailConsumer=async()=>{
                         port:465,
                         secure:true,
                         auth:{
-                            user:"nikhilchowdary2006@gmail.com",
+                            user:process.env.GOOGLE_USER,
                             pass:process.env.GOOGLE_PASS
                         }
                     })
