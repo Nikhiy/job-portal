@@ -45,3 +45,121 @@ RETURNING *
         company:newCompany
     })
 })
+
+export const deleteCompany=TryCatch(async(req:AuthenticatedRequest,res)=>{
+    const user=req.user;
+    const {companyId}=req.params;
+    const company=await sql`
+    SELECT logo_public_id FROM companies WHERE company_id=${companyId} AND recruiter_id=${user?.user_id}
+    `;
+
+    if(!company){
+        throw new ErrorHandler(404,"No company found wth this CompanyID")
+    }
+
+    await sql`
+    DELETE FROM companies WHERE company_id=${companyId}
+    `;
+
+    res.json({
+        message:"Company and all associated jobs have been deleted"
+    })
+
+})
+
+export const createJob=TryCatch(async(req:AuthenticatedRequest,res)=>{
+    const user=req.user;
+    if(!user){
+        throw new ErrorHandler(401,"Authentication required")
+    }
+
+    if(user.role!=="recruiter"){
+        throw new ErrorHandler(403,"Forbidden Request")
+    }
+    const {title,description,salary,location,role,job_type,work_location,company_id,openings}=req.body;
+    if(!title || !description || !salary || !location || !role || !job_type || !work_location || !company_id || !openings){
+        throw new ErrorHandler(400,"All fields are required")
+    }
+    const [company]=await sql`
+    SELECT company_id FROM companies WHERE company_id=${company_id} AND recruiter_id=${user.user_id}
+    `;
+    if(!company){
+        throw new ErrorHandler(404,"No company found with this CompanyId")
+    }
+    const [newJob] = await sql`
+INSERT INTO jobs 
+(title,description,salary,location,role,job_type,work_location,company_id,posted_by_recuriter_id,openings) 
+VALUES 
+(${title},${description},${salary},${location},${role},${job_type},${work_location},${company_id},${user.user_id},${openings}) 
+RETURNING *
+`;
+
+    res.json({
+        message:"Job posted Succesfully",
+        job:newJob
+    })
+})
+
+export const updateJob =TryCatch(async(req:AuthenticatedRequest,res)=>{
+    const user=req.user;
+    if(!user){
+        throw new ErrorHandler(401,"Authentication required")
+    }
+
+    if(user.role!=="recruiter"){
+        throw new ErrorHandler(403,"Forbidden Request")
+    }
+    const {title,description,salary,location,role,job_type,work_location,company_id,openings,is_active
+    }=req.body;
+     
+    const [existingJob]=await sql `
+    SELECT posted_by_recuriter_id from jobs where job_id=${req.params.jobId}
+    `
+
+    if(!existingJob){
+        throw new ErrorHandler(404,"Job not found")
+    }
+    if(existingJob.posted_by_recuriter_id!==user.user_id){
+        throw new ErrorHandler(403,"Forbidden action")
+    }
+    const [updatedJob]=await sql`
+    UPDATE jobs set title=${title},
+    description=${description},salary=${salary},location=${location},role=${role},job_type=${job_type},work_location=${work_location},
+    openings=${openings},is_active=${is_active} WHERE job_id=${req.params.jobId} RETURNING *;
+    `;
+
+    res.json({
+        message:"Job Updated Succesfully",
+        job:updatedJob
+    })
+})
+
+export const getAllCompany=TryCatch(async(req:AuthenticatedRequest,res)=>{
+    const companies=await sql`
+    SELECT * FROM companies WHERE recruiter_id=${req.user?.user_id}
+    `;
+
+    res.json(companies)
+})
+
+
+export const getCompanyDetails=TryCatch(async(req:AuthenticatedRequest,res)=>{
+    const {id}=req.params;
+    if(!id){
+        throw new ErrorHandler(400,"CompanyID is Required")
+    }
+    const [companyData]=await sql `
+    SELECT c.*,COALESCE (
+    (
+    SELECT json_agg(j.*) FROM jobs j WHERE j.company_id=c.company_id),
+    '[]':: json) AS jobs
+    FROM companies c WHERE c.company_id =${id} GROUP BY c.company_id;
+    `;
+
+    if(!companyData){
+        throw new ErrorHandler(404,"NO company Found")
+    }
+
+    res.json(companyData)
+})
+
