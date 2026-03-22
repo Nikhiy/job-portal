@@ -163,3 +163,81 @@ export const getCompanyDetails=TryCatch(async(req:AuthenticatedRequest,res)=>{
     res.json(companyData)
 })
 
+export const getAllActiveJobs = TryCatch(async (req,res) => {
+    const { title, location } = req.query as {
+        title?: string;
+        location?: string;
+    };
+
+    let queryString = `
+    SELECT 
+        j.job_id,
+        j.title,
+        j.description,
+        j.salary,
+        j.location,
+        j.job_type,
+        j.role,
+        j.work_location,
+        j.created_at,
+        c.name AS company_name,
+        c.logo AS company_logo,
+        c.company_id AS company_id
+    FROM jobs j
+    JOIN companies c ON j.company_id = c.company_id
+    WHERE j.is_active = true
+    `;
+
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (title) {
+        queryString += ` AND j.title ILIKE $${paramIndex}`;
+        values.push(`%${title}%`);
+        paramIndex++;
+    }
+
+    if (location) {
+        queryString += ` AND j.location ILIKE $${paramIndex}`;
+        values.push(`%${location}%`);
+        paramIndex++;
+    }
+
+    queryString += " ORDER BY j.created_at DESC";
+
+    const jobs = (await sql.query(queryString, values)) as any[];
+
+    res.json(jobs);
+});
+
+export const getSingleJob=TryCatch(async(req,res)=>{
+    const [job]=await sql`
+    SELECT * FROM jobs WHERE job_id =${req.params.jobId}
+    `
+    res.json(job)
+})
+
+export const getAllApplicationForJob=TryCatch(async(req:AuthenticatedRequest,res)=>{
+    const user=req.user;
+    if(!user){
+        throw new ErrorHandler(401,"Authentication required")
+    }
+
+    if(user.role!=="recruiter"){
+        throw new ErrorHandler(403,"Forbidden Request")
+    }
+    const {jobId}=req.params;
+    const [job]= await sql `
+    SELECT posted_by_recuriter_id FROM jobs WHERE job_id=${jobId}
+    `
+    if(!job){
+        throw new ErrorHandler(404,"Job Not found")
+    }
+    if(job.posted_by_recuriter_id!==user.user_id){
+        throw new ErrorHandler(403,"Forbidden request")
+    }
+    const applications=await sql`
+    SELECT * FROM applications WHERE job_id=${jobId} ORDER BY subscribed DESC,applied_at ASC
+    `
+    res.json(applications)
+})
