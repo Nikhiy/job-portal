@@ -104,7 +104,7 @@ router.post("/career",async(req,res)=>{
 })
 
 
-router.post("/resume-analyzer",async(req,res)=>{
+router.post("/resume-analyser",async(req,res)=>{
     try {
         const {pdfBase64}=req.body
         if(!pdfBase64){
