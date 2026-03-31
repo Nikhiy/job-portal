@@ -4,6 +4,9 @@ import { sql } from "../utils/db.js";
 import ErrorHandler from "../utils/errorHandler.js";
 import { TryCatch } from "../utils/TryCatch.js";
 import crypto from "crypto"
+import dotenv from 'dotenv'
+dotenv.config()
+
 
 export const checkOut=TryCatch(async(req:AuthenticatedRequest,res)=>{
     if(!req.user){
